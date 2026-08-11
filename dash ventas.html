@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Analítico de Ventas 2026</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (XLSX Parser) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff', 100: '#e0effe', 500: '#2563eb', 600: '#1d4ed8', 700: '#1e40af', 800: '#1e3a8a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="h-full text-slate-800 flex flex-col custom-scrollbar">
+
+    <!-- Header Principal -->
+    <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-brand-600 rounded-lg text-white">
+                    <i class="fa-solid fa-chart-line text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">Control de Ventas & Cumplimiento 2026</h1>
+                    <p class="text-xs text-slate-400">Dashboard de Ventas por Vendedor, Tienda y Segmento</p>
+                </div>
+            </div>
+
+            <!-- Botones de Acción -->
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <button id="btn-upload-trigger" class="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition shadow-sm">
+                    <i class="fa-solid fa-file-excel"></i>
+                    <span class="hidden sm:inline">Cargar Excel Diario</span>
+                    <span class="sm:hidden">Cargar</span>
+                </button>
+                <button id="btn-reset-data" class="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition border border-slate-700">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span class="hidden md:inline">Restablecer Datos</span>
+                </button>
+                <button id="btn-export-csv" class="flex items-center space-x-2 bg-brand-600 hover:bg-brand-700 text-white px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition shadow-sm">
+                    <i class="fa-solid fa-download"></i>
+                    <span class="hidden md:inline">Exportar CSV</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Modal para Carga de Archivo Excel -->
+    <div id="upload-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative">
+            <button id="btn-close-modal" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div class="text-center mb-6">
+                <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl">
+                    <i class="fa-solid fa-file-excel"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-800">Actualizar Reporte Diario de Ventas</h3>
+                <p class="text-xs text-slate-500 mt-1">Sube tu archivo Excel para actualizar automáticamente el cumplimiento de ventas</p>
+            </div>
+
+            <div id="drop-zone" class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-brand-500 transition cursor-pointer bg-slate-50">
+                <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
+                <p class="text-sm font-medium text-slate-700">Arrastra tu archivo Excel de ventas aquí</p>
+                <p class="text-xs text-slate-400 mt-1">o haz clic para seleccionar (.xlsx, .xls)</p>
+                <input type="file" id="file-input" accept=".xlsx, .xls" class="hidden">
+            </div>
+
+            <div id="file-status" class="mt-4 text-xs text-center font-medium hidden"></div>
+
+            <div class="mt-6 flex justify-end">
+                <button id="btn-cancel-modal" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicador de Fuente de Datos -->
+    <div class="bg-slate-100 border-b border-slate-200 px-4 py-2 text-xs text-slate-600">
+        <div class="max-w-7xl mx-auto w-full flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span id="data-source-label">Fuente de Datos: <strong>REPORTE DE VENTAS GENERAL AGOSTO 2026</strong></span>
+            </div>
+            <div id="records-counter" class="font-semibold text-slate-700">Meta Anual YTD: RD$ 829,032,068 | Ejecutado: RD$ 742,360,715 (89.5%)</div>
+        </div>
+    </div>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Barra de Filtros Interactivos -->
+        <section class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-filter text-brand-600 text-sm"></i>
+                    <h2 class="font-semibold text-slate-800 text-sm">Filtros de Análisis Comercial</h2>
+                </div>
+                <button id="btn-clear-filters" class="text-xs text-brand-600 hover:text-brand-800 font-medium flex items-center space-x-1">
+                    <i class="fa-solid fa-filter-circle-xmark"></i>
+                    <span>Limpiar Filtros</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <!-- Filtro por Agrupación / Vista -->
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Vista Principal</label>
+                    <select id="filter-view" class="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg text-xs p-2.5 focus:ring-brand-500">
+                        <option value="GENERAL">General Consolidado</option>
+                        <option value="VENDEDOR" selected>Por Vendedor</option>
+                        <option value="TIENDA">Por Tienda / Sucursal</option>
+                        <option value="SEGMENTO">Por Segmento de Mercado</option>
+                    </select>
+                </div>
+
+                <!-- Filtro por Mes -->
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Mes de Análisis</label>
+                    <select id="filter-month" class="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg text-xs p-2.5 focus:ring-brand-500">
+                        <option value="8" selected>Agosto 2026 (Actual)</option>
+                        <option value="ALL">Todos los Meses (Ene - Ago YTD)</option>
+                        <option value="1">Enero</option>
+                        <option value="2">Febrero</option>
+                        <option value="3">Marzo</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Mayo</option>
+                        <option value="6">Junio</option>
+                        <option value="7">Julio</option>
+                    </select>
+                </div>
+
+                <!-- Filtro por Entidad Específica -->
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Filtrar por Entidad</label>
+                    <select id="filter-entity" class="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg text-xs p-2.5 focus:ring-brand-500">
+                        <option value="ALL">Todas las Entidades</option>
+                    </select>
+                </div>
+
+                <!-- Filtro de Rango de Cumplimiento -->
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Rango de Cumplimiento</label>
+                    <select id="filter-status" class="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg text-xs p-2.5 focus:ring-brand-500">
+                        <option value="ALL">Todos los Rangos</option>
+                        <option value="RED">🔴 69% o menos (Bajo)</option>
+                        <option value="YELLOW">🟡 70% a 89% (Medio)</option>
+                        <option value="BLUE">🔵 90% a 99% (Cercano)</option>
+                        <option value="GREEN">🟢 100% o más (Meta Alcanzada)</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tarjetas de KPIs Estratégicos -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- KPI 1: Ventas Realizadas (Cumplimiento) -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-medium text-slate-500 uppercase">Cumplimiento Real</p>
+                        <h3 id="kpi-total-ventas" class="text-xl font-bold text-slate-900 mt-1">RD$ 0</h3>
+                        <p id="kpi-sub-ventas" class="text-xs text-emerald-600 font-medium mt-1">Agosto 2026</p>
+                    </div>
+                    <div class="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                        <i class="fa-solid fa-sack-dollar text-lg"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI 2: Presupuesto / Meta -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-medium text-slate-500 uppercase">Presupuesto (Meta)</p>
+                        <h3 id="kpi-total-meta" class="text-xl font-bold text-slate-900 mt-1">RD$ 0</h3>
+                        <p id="kpi-sub-meta" class="text-xs text-slate-500 font-medium mt-1">Meta Proyectada</p>
+                    </div>
+                    <div class="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                        <i class="fa-solid fa-bullseye text-lg"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI 3: Porcentaje Alcanzado -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-medium text-slate-500 uppercase">% Cumplimiento</p>
+                        <h3 id="kpi-porcentaje" class="text-2xl font-bold text-slate-900 mt-1">0%</h3>
+                        <p id="kpi-sub-porcentaje" class="text-xs font-medium mt-1 px-2 py-0.5 rounded inline-block bg-slate-100 text-slate-600">-</p>
+                    </div>
+                    <div class="p-2 bg-purple-50 text-purple-600 rounded-lg">
+                        <i class="fa-solid fa-percent text-lg"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI 4: RunRate / Proyección de Cierre -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-medium text-slate-500 uppercase">Proyección (RunRate)</p>
+                        <h3 id="kpi-runrate" class="text-xl font-bold text-slate-900 mt-1">RD$ 0</h3>
+                        <p id="kpi-sub-runrate" class="text-xs text-slate-500 font-medium mt-1">Proyección de cierre</p>
+                    </div>
+                    <div class="p-2 bg-amber-50 text-amber-600 rounded-lg">
+                        <i class="fa-solid fa-chart-line text-lg"></i>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Gráficos Principales -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Gráfico 1: Evolución Mensual Meta vs Cumplimiento -->
+            <div class="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-sm sm:text-base">Evolución Mensual: Meta vs Cumplimiento 2026</h3>
+                        <p class="text-xs text-slate-500">Comparativa mensual de desempeño comercial (RD$)</p>
+                    </div>
+                </div>
+                <div class="relative w-full h-72 sm:h-80">
+                    <canvas id="chart-monthly-sales"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico 2: Participación por Segmento -->
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-sm sm:text-base">Ventas por Segmento</h3>
+                        <p class="text-xs text-slate-500">Distribución por línea de negocio</p>
+                    </div>
+                </div>
+                <div class="relative w-full h-72 sm:h-80 flex items-center justify-center">
+                    <canvas id="chart-segment-doughnut"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico 3: Desempeño por Vendedor / Tienda -->
+            <div class="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 id="chart-bar-title" class="font-bold text-slate-800 text-sm sm:text-base">Cumplimiento por Vendedor</h3>
+                        <p class="text-xs text-slate-500">Ranking por porcentaje de meta alcanzada</p>
+                    </div>
+                </div>
+                <div class="relative w-full h-72 sm:h-80">
+                    <canvas id="chart-ranking-bar"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico 4: Comparativo Interanual 2025 vs 2026 -->
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-sm sm:text-base">Comparativo 2025 vs 2026</h3>
+                        <p class="text-xs text-slate-500">Crecimiento de ventas interanual</p>
+                    </div>
+                </div>
+                <div class="relative w-full h-72 sm:h-80">
+                    <canvas id="chart-comparative"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tabla Resumen Detallada -->
+        <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h3 class="font-bold text-slate-800 text-sm sm:text-base">Detalle de Cumplimiento de Ventas</h3>
+                    <p class="text-xs text-slate-500">Desglose por Vendedor, Tienda o Segmento con semaforización</p>
+                </div>
+                <div class="relative w-full sm:w-64">
+                    <input type="text" id="search-input" placeholder="Buscar por nombre..." class="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg text-xs pl-8 pr-3 py-2 focus:ring-brand-500">
+                    <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto custom-scrollbar">
+                <table class="w-full text-xs text-left text-slate-600">
+                    <thead class="text-xs text-slate-700 bg-slate-100 font-semibold uppercase border-b border-slate-200">
+                        <tr>
+                            <th class="py-3 px-4">#</th>
+                            <th class="py-3 px-4">Entidad</th>
+                            <th class="py-3 px-4 text-right">Presupuesto (Meta)</th>
+                            <th class="py-3 px-4 text-right">Cumplimiento (RD$)</th>
+                            <th class="py-3 px-4 text-right">% Cumplimiento</th>
+                            <th class="py-3 px-4 text-right">RunRate Proyectado</th>
+                            <th class="py-3 px-4 text-center">Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sales-table-body" class="divide-y divide-slate-100">
+                        <!-- Cargado por JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
+                <span id="pagination-info">Mostrando 0 de 0 registros</span>
+                <div class="flex space-x-1">
+                    <button id="btn-prev-page" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded">Anterior</button>
+                    <button id="btn-next-page" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded">Siguiente</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-white border-t border-slate-200 py-4 mt-8 text-center text-xs text-slate-500">
+        <p>Dashboard Analítico de Ventas General 2026 &copy; Todos los derechos reservados.</p>
+    </footer>
+
+    <script>
+        // DATA OFICIAL EXTRAÍDA DEL EXCEL
+        const OFFICIAL_DATA = {
+            generalMonthly2026: [
+                { month: 1, name: "Enero", meta: 91984346.46, cumplimiento: 74547683.49, pct: 0.8104 },
+                { month: 2, name: "Febrero", meta: 91651500.67, cumplimiento: 83011570.51, pct: 0.9057 },
+                { month: 3, name: "Marzo", meta: 101489118.24, cumplimiento: 99291362.58, pct: 0.9783 },
+                { month: 4, name: "Abril", meta: 93211944.62, cumplimiento: 130577749.66, pct: 1.4008 },
+                { month: 5, name: "Mayo", meta: 118447282.74, cumplimiento: 119245199.86, pct: 1.0067 },
+                { month: 6, name: "Junio", meta: 98155541.26, cumplimiento: 102424626.01, pct: 1.0434 },
+                { month: 7, name: "Julio", meta: 114389633.00, cumplimiento: 109115109.68, pct: 0.9538 },
+                { month: 8, name: "Agosto", meta: 119702700.57, cumplimiento: 24147413.63, pct: 0.2017 }
+            ],
+            agostoVendedores: [
+                { nombre: "GERSON MENDEZ", presupuesto: 1616341.87, cumplimiento: 1604722.75, porcentaje: 0.9928, runrate: 6739835.57 },
+                { nombre: "ARIEL ABREU", presupuesto: 1848373.94, cumplimiento: 117900.43, porcentaje: 0.0638, runrate: 495181.79 },
+                { nombre: "JORDY GLASS", presupuesto: 896107.47, cumplimiento: 115567.21, porcentaje: 0.1290, runrate: 485382.30 },
+                { nombre: "LUIS QUIÑONES", presupuesto: 3013482.07, cumplimiento: 926054.00, porcentaje: 0.3073, runrate: 3889426.82 },
+                { nombre: "LINGERT", presupuesto: 2440390.14, cumplimiento: 133293.48, porcentaje: 0.0546, runrate: 559832.61 },
+                { nombre: "JESUS MELO", presupuesto: 1878930.97, cumplimiento: 1417522.53, porcentaje: 0.7544, runrate: 5953594.62 },
+                { nombre: "OSCAR RODRIGUEZ", presupuesto: 881180.11, cumplimiento: -21876.23, porcentaje: -0.0248, runrate: -91880.16 },
+                { nombre: "GERCI PAREDEZ", presupuesto: 1071609.52, cumplimiento: 0.00, porcentaje: 0.0000, runrate: 0.00 },
+                { nombre: "JAIME YGNACIO", presupuesto: 1346082.37, cumplimiento: 420315.52, porcentaje: 0.3123, runrate: 1765325.19 },
+                { nombre: "DAURYS GUERRERO", presupuesto: 2348663.71, cumplimiento: 84592.95, porcentaje: 0.0360, runrate: 355290.40 },
+                { nombre: "LUIS GARCIA", presupuesto: 5424572.21, cumplimiento: 4260909.48, porcentaje: 0.7855, runrate: 17895819.80 },
+                { nombre: "HONAS MEDINA", presupuesto: 1650758.10, cumplimiento: 398829.71, porcentaje: 0.2416, runrate: 1675084.77 },
+                { nombre: "KATHERINE VALDEZ", presupuesto: 4248827.54, cumplimiento: 711041.58, porcentaje: 0.1674, runrate: 2986374.63 },
+                { nombre: "LUIS JHOVANNY", presupuesto: 3457473.43, cumplimiento: 1183447.32, porcentaje: 0.3423, runrate: 4970478.74 },
+                { nombre: "JOSÉ EMIL", presupuesto: 2525890.84, cumplimiento: 260421.08, porcentaje: 0.1031, runrate: 1093768.55 },
+                { nombre: "JULIO SANTOS", presupuesto: 4658088.27, cumplimiento: 943819.83, porcentaje: 0.2026, runrate: 3964043.27 }
+            ],
+            agostoTiendas: [
+                { nombre: "ARROYO HONDO", presupuesto: 2517657.45, cumplimiento: 982648.52, porcentaje: 0.3903, runrate: 4127123.80 },
+                { nombre: "ALAMEDA", presupuesto: 3186978.07, cumplimiento: 1189223.52, porcentaje: 0.3732, runrate: 4994738.78 },
+                { nombre: "BANÍ", presupuesto: 1335288.40, cumplimiento: 331642.98, porcentaje: 0.2484, runrate: 1392900.53 },
+                { nombre: "BÁVARO", presupuesto: 14077431.45, cumplimiento: 5453711.66, porcentaje: 0.3874, runrate: 22905588.99 },
+                { nombre: "BELLA VISTA", presupuesto: 9238013.09, cumplimiento: 1342410.11, porcentaje: 0.1453, runrate: 5638122.45 },
+                { nombre: "CHURCHILL", presupuesto: 7418846.93, cumplimiento: 1084448.15, porcentaje: 0.1462, runrate: 4554682.23 },
+                { nombre: "LA VEGA", presupuesto: 1485648.24, cumplimiento: 151743.41, porcentaje: 0.1021, runrate: 637322.32 },
+                { nombre: "LUPERÓN", presupuesto: 16100647.31, cumplimiento: 597379.59, porcentaje: 0.0371, runrate: 2508994.26 },
+                { nombre: "PUNTA CANA", presupuesto: 10648273.91, cumplimiento: 1516208.13, porcentaje: 0.1424, runrate: 6368074.16 },
+                { nombre: "FÁBRICA", presupuesto: 6941800.25, cumplimiento: 406846.19, porcentaje: 0.0586, runrate: 1708754.02 },
+                { nombre: "PUERTO PLATA", presupuesto: 2740795.80, cumplimiento: 273437.01, porcentaje: 0.0998, runrate: 1148435.43 },
+                { nombre: "LA ROMANA", presupuesto: 8846214.46, cumplimiento: 1466862.86, porcentaje: 0.1658, runrate: 6160824.01 },
+                { nombre: "SAN FRANCISCO", presupuesto: 2089012.46, cumplimiento: 503730.20, porcentaje: 0.2411, runrate: 2115666.86 },
+                { nombre: "SAN ISIDRO", presupuesto: 2693903.12, cumplimiento: 389930.45, porcentaje: 0.1447, runrate: 1637707.88 },
+                { nombre: "SAN MARTIN", presupuesto: 2781830.25, cumplimiento: 407725.83, porcentaje: 0.1466, runrate: 1712448.51 },
+                { nombre: "SANTIAGO 2", presupuesto: 6142349.09, cumplimiento: 1737707.04, porcentaje: 0.2829, runrate: 7298369.57 },
+                { nombre: "SANTIAGO", presupuesto: 4393856.48, cumplimiento: 763758.03, porcentaje: 0.1738, runrate: 3207783.73 },
+                { nombre: "LAS TERRENAS", presupuesto: 2503813.58, cumplimiento: 580952.14, porcentaje: 0.2320, runrate: 2439998.98 },
+                { nombre: "TIRADENTES", presupuesto: 9289618.06, cumplimiento: 2204749.35, porcentaje: 0.2373, runrate: 9259947.27 },
+                { nombre: "VILLA MELLA", presupuesto: 1280153.53, cumplimiento: 297473.00, porcentaje: 0.2324, runrate: 1249386.62 },
+                { nombre: "ZONA ORIENTAL", presupuesto: 3990568.62, cumplimiento: 2464825.44, porcentaje: 0.6177, runrate: 10352266.86 }
+            ],
+            agostoSegmentos: [
+                { nombre: "ARQUITECTÓNICO", presupuesto: 73085245.26, cumplimiento: 15669364.84, porcentaje: 0.2144, runrate: 65811332.32 },
+                { nombre: "INDUSTRIAL", presupuesto: 15998846.05, cumplimiento: 2874639.33, porcentaje: 0.1797, runrate: 12073485.19 },
+                { nombre: "AUTOMOTRIZ", presupuesto: 23480560.39, cumplimiento: 4103905.29, porcentaje: 0.1748, runrate: 17236402.21 },
+                { nombre: "MADERA", presupuesto: 3337352.48, cumplimiento: 635473.58, porcentaje: 0.1904, runrate: 2668989.04 },
+                { nombre: "THINNERS", presupuesto: 2420282.04, cumplimiento: 395225.79, porcentaje: 0.1633, runrate: 1659948.33 },
+                { nombre: "ASOCIADOS", presupuesto: 1552272.52, cumplimiento: 280783.23, porcentaje: 0.1809, runrate: 1179289.55 },
+                { nombre: "OTROS / VARIOS", presupuesto: 0, cumplimiento: 188021.57, porcentaje: 0, runrate: 0 }
+            ],
+            comparativo20252026: [
+                { mes: "Enero", a2025: 82905524.14, a2026: 74547683.49 },
+                { mes: "Febrero", a2025: 73092534.73, a2026: 83011570.51 },
+                { mes: "Marzo", a2025: 94271190.10, a2026: 99291362.58 },
+                { mes: "Abril", a2025: 74555262.11, a2026: 130577749.66 },
+                { mes: "Mayo", a2025: 111663031.83, a2026: 119245199.86 },
+                { mes: "Junio", a2025: 82657515.69, a2026: 102535461.30 },
+                { mes: "Julio", a2025: 100442776.42, a2026: 109115109.68 },
+                { mes: "Agosto", a2025: 114547526.73, a2026: 24147413.63 }
+            ]
+        };
+
+        // Estado Global de la App
+        let activeView = "VENDEDOR";
+        let activeMonth = "8";
+        let activeEntity = "ALL";
+        let activeStatus = "ALL";
+        let currentPage = 1;
+        const itemsPerPage = 8;
+
+        // Instancias de Charts
+        let chartMonthly = null, chartSegment = null, chartRanking = null, chartComp = null;
+
+        // Formateador de moneda
+        const formatRD = (val) => "RD$ " + Number(val || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        window.addEventListener('load', () => {
+            initDashboard();
+            setupEventListeners();
+        });
+
+        function initDashboard() {
+            populateEntityDropdown();
+            updateDashboard();
+        }
+
+        function populateEntityDropdown() {
+            const select = document.getElementById('filter-entity');
+            select.innerHTML = '<option value="ALL">Todas las Entidades</option>';
+            
+            let list = [];
+            if (activeView === 'VENDEDOR') list = OFFICIAL_DATA.agostoVendedores.map(i => i.nombre);
+            else if (activeView === 'TIENDA') list = OFFICIAL_DATA.agostoTiendas.map(i => i.nombre);
+            else if (activeView === 'SEGMENTO') list = OFFICIAL_DATA.agostoSegmentos.map(i => i.nombre);
+
+            list.sort().forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item;
+                opt.textContent = item;
+                select.appendChild(opt);
+            });
+        }
+
+        function getFilteredDataset() {
+            let dataset = [];
+            if (activeView === 'VENDEDOR') dataset = [...OFFICIAL_DATA.agostoVendedores];
+            else if (activeView === 'TIENDA') dataset = [...OFFICIAL_DATA.agostoTiendas];
+            else if (activeView === 'SEGMENTO') dataset = [...OFFICIAL_DATA.agostoSegmentos];
+            else {
+                // GENERAL
+                dataset = OFFICIAL_DATA.generalMonthly2026.map(m => ({
+                    nombre: m.name,
+                    presupuesto: m.meta,
+                    cumplimiento: m.cumplimiento,
+                    porcentaje: m.pct,
+                    runrate: m.cumplimiento
+                }));
+            }
+
+            if (activeEntity !== 'ALL') {
+                dataset = dataset.filter(i => i.nombre === activeEntity);
+            }
+
+            if (activeStatus !== 'ALL') {
+                dataset = dataset.filter(i => {
+                    const pct = i.porcentaje;
+                    if (activeStatus === 'RED') return pct < 0.70;
+                    if (activeStatus === 'YELLOW') return pct >= 0.70 && pct < 0.90;
+                    if (activeStatus === 'BLUE') return pct >= 0.90 && pct < 1.00;
+                    if (activeStatus === 'GREEN') return pct >= 1.00;
+                    return true;
+                });
+            }
+
+            return dataset;
+        }
+
+        function updateDashboard() {
+            const dataset = getFilteredDataset();
+            updateKPIs(dataset);
+            updateCharts(dataset);
+            updateTable(dataset);
+        }
+
+        function updateKPIs(dataset) {
+            const totalMeta = dataset.reduce((s, i) => s + (i.presupuesto || 0), 0);
+            const totalVentas = dataset.reduce((s, i) => s + (i.cumplimiento || 0), 0);
+            const totalRunrate = dataset.reduce((s, i) => s + (i.runrate || 0), 0);
+            const pctAvg = totalMeta > 0 ? (totalVentas / totalMeta) : 0;
+
+            document.getElementById('kpi-total-ventas').textContent = formatRD(totalVentas);
+            document.getElementById('kpi-total-meta').textContent = formatRD(totalMeta);
+            document.getElementById('kpi-runrate').textContent = formatRD(totalRunrate);
+            
+            const pctEl = document.getElementById('kpi-porcentaje');
+            const subPctEl = document.getElementById('kpi-sub-porcentaje');
+            const pctVal = (pctAvg * 100).toFixed(1) + "%";
+            pctEl.textContent = pctVal;
+
+            if (pctAvg >= 1.0) {
+                subPctEl.className = "text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800";
+                subPctEl.textContent = "🟢 Meta Superada";
+            } else if (pctAvg >= 0.90) {
+                subPctEl.className = "text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800";
+                subPctEl.textContent = "🔵 Excelente Desempeño";
+            } else if (pctAvg >= 0.70) {
+                subPctEl.className = "text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800";
+                subPctEl.textContent = "🟡 En Seguimiento";
+            } else {
+                subPctEl.className = "text-xs font-semibold px-2 py-0.5 rounded bg-rose-100 text-rose-800";
+                subPctEl.textContent = "🔴 Requiere Atención";
+            }
+        }
+
+        function updateCharts(dataset) {
+            // 1. Mensual Meta vs Cumplimiento
+            const monthLabels = OFFICIAL_DATA.generalMonthly2026.map(m => m.name);
+            const metaData = OFFICIAL_DATA.generalMonthly2026.map(m => m.meta);
+            const cumpData = OFFICIAL_DATA.generalMonthly2026.map(m => m.cumplimiento);
+
+            if (chartMonthly) chartMonthly.destroy();
+            const ctxM = document.getElementById('chart-monthly-sales').getContext('2d');
+            chartMonthly = new Chart(ctxM, {
+                type: 'bar',
+                data: {
+                    labels: monthLabels,
+                    datasets: [
+                        { label: 'Presupuesto (Meta)', data: metaData, backgroundColor: 'rgba(203, 213, 225, 0.8)', borderRadius: 4 },
+                        { label: 'Cumplimiento Real', data: cumpData, backgroundColor: 'rgba(37, 99, 235, 0.85)', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${formatRD(c.parsed.y)}` } } },
+                    scales: { y: { ticks: { callback: (v) => 'RD$ ' + (v/1e6).toFixed(0) + 'M' } } }
+                }
+            });
+
+            // 2. Segmentos Dona
+            const segLabels = OFFICIAL_DATA.agostoSegmentos.map(s => s.nombre);
+            const segData = OFFICIAL_DATA.agostoSegmentos.map(s => s.cumplimiento);
+
+            if (chartSegment) chartSegment.destroy();
+            const ctxS = document.getElementById('chart-segment-doughnut').getContext('2d');
+            chartSegment = new Chart(ctxS, {
+                type: 'doughnut',
+                data: {
+                    labels: segLabels,
+                    datasets: [{
+                        data: segData,
+                        backgroundColor: ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b']
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
+                    cutout: '60%'
+                }
+            });
+
+            // 3. Ranking Bar
+            const topData = [...dataset].sort((a,b) => b.porcentaje - a.porcentaje).slice(0, 10);
+            const rankLabels = topData.map(i => i.nombre);
+            const rankValues = topData.map(i => (i.porcentaje * 100).toFixed(1));
+            const rankColors = topData.map(i => i.porcentaje >= 1.0 ? '#10b981' : (i.porcentaje >= 0.7 ? '#f59e0b' : '#ef4444'));
+
+            document.getElementById('chart-bar-title').textContent = `Ranking de Cumplimiento (${activeView})`;
+
+            if (chartRanking) chartRanking.destroy();
+            const ctxR = document.getElementById('chart-ranking-bar').getContext('2d');
+            chartRanking = new Chart(ctxR, {
+                type: 'bar',
+                data: {
+                    labels: rankLabels,
+                    datasets: [{ label: '% Cumplimiento', data: rankValues, backgroundColor: rankColors, borderRadius: 4 }]
+                },
+                options: {
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { x: { ticks: { callback: (v) => v + '%' } } }
+                }
+            });
+
+            // 4. Comparativo 2025 vs 2026
+            const compLabels = OFFICIAL_DATA.comparativo20252026.map(c => c.mes);
+            const c2025 = OFFICIAL_DATA.comparativo20252026.map(c => c.a2025);
+            const c2026 = OFFICIAL_DATA.comparativo20252026.map(c => c.a2026);
+
+            if (chartComp) chartComp.destroy();
+            const ctxC = document.getElementById('chart-comparative').getContext('2d');
+            chartComp = new Chart(ctxC, {
+                type: 'line',
+                data: {
+                    labels: compLabels,
+                    datasets: [
+                        { label: 'Año 2025', data: c2025, borderColor: '#94a3b8', borderWidth: 2, tension: 0.3 },
+                        { label: 'Año 2026', data: c2026, borderColor: '#2563eb', borderWidth: 3, tension: 0.3 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { y: { ticks: { callback: (v) => 'RD$ ' + (v/1e6).toFixed(0) + 'M' } } }
+                }
+            });
+        }
+
+        function updateTable(dataset) {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const filtered = dataset.filter(i => i.nombre.toLowerCase().includes(searchTerm));
+            
+            const totalItems = filtered.length;
+            const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const paginated = filtered.slice(startIndex, startIndex + itemsPerPage);
+
+            const tbody = document.getElementById('sales-table-body');
+            tbody.innerHTML = '';
+
+            if (paginated.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400">No se encontraron registros.</td></tr>`;
+                return;
+            }
+
+            paginated.forEach((item, index) => {
+                const pct = (item.porcentaje * 100).toFixed(1);
+                let badge = '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 text-rose-800">🔴 Bajo (&lt;70%)</span>';
+                if (item.porcentaje >= 1.0) badge = '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">🟢 Logrado (≥100%)</span>';
+                else if (item.porcentaje >= 0.90) badge = '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">🔵 Alto (90-99%)</span>';
+                else if (item.porcentaje >= 0.70) badge = '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">🟡 Medio (70-89%)</span>';
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-slate-400">${startIndex + index + 1}</td>
+                    <td class="py-3 px-4 font-semibold text-slate-800">${item.nombre}</td>
+                    <td class="py-3 px-4 text-right">${formatRD(item.presupuesto)}</td>
+                    <td class="py-3 px-4 text-right font-bold text-slate-900">${formatRD(item.cumplimiento)}</td>
+                    <td class="py-3 px-4 text-right font-semibold ${item.porcentaje>=1?'text-emerald-600':'text-slate-700'}">${pct}%</td>
+                    <td class="py-3 px-4 text-right text-slate-500">${formatRD(item.runrate)}</td>
+                    <td class="py-3 px-4 text-center">${badge}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('pagination-info').textContent = `Mostrando ${paginated.length > 0 ? startIndex + 1 : 0} a ${Math.min(startIndex + itemsPerPage, totalItems)} de ${totalItems} registros`;
+            document.getElementById('btn-prev-page').disabled = currentPage === 1;
+            document.getElementById('btn-next-page').disabled = currentPage === totalPages;
+        }
+
+        function setupEventListeners() {
+            document.getElementById('filter-view').addEventListener('change', (e) => {
+                activeView = e.target.value;
+                activeEntity = "ALL";
+                populateEntityDropdown();
+                updateDashboard();
+            });
+
+            document.getElementById('filter-entity').addEventListener('change', (e) => {
+                activeEntity = e.target.value;
+                updateDashboard();
+            });
+
+            document.getElementById('filter-status').addEventListener('change', (e) => {
+                activeStatus = e.target.value;
+                updateDashboard();
+            });
+
+            document.getElementById('btn-clear-filters').addEventListener('click', () => {
+                document.getElementById('filter-view').value = "VENDEDOR";
+                document.getElementById('filter-entity').value = "ALL";
+                document.getElementById('filter-status').value = "ALL";
+                document.getElementById('search-input').value = "";
+                activeView = "VENDEDOR";
+                activeEntity = "ALL";
+                activeStatus = "ALL";
+                populateEntityDropdown();
+                updateDashboard();
+            });
+
+            document.getElementById('search-input').addEventListener('input', () => {
+                currentPage = 1;
+                updateDashboard();
+            });
+
+            document.getElementById('btn-prev-page').addEventListener('click', () => { if (currentPage > 1) { currentPage--; updateDashboard(); } });
+            document.getElementById('btn-next-page').addEventListener('click', () => { currentPage++; updateDashboard(); });
+
+            // Modal Carga
+            const modal = document.getElementById('upload-modal');
+            document.getElementById('btn-upload-trigger').addEventListener('click', () => modal.classList.remove('hidden'));
+            document.getElementById('btn-close-modal').addEventListener('click', () => modal.classList.add('hidden'));
+            document.getElementById('btn-cancel-modal').addEventListener('click', () => modal.classList.add('hidden'));
+
+            // Drag and Drop
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+            dropZone.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => { if(e.target.files.length) handleFileUpload(e.target.files[0]); });
+
+            // Export CSV
+            document.getElementById('btn-export-csv').addEventListener('click', exportToCSV);
+        }
+
+        function handleFileUpload(file) {
+            const statusEl = document.getElementById('file-status');
+            statusEl.classList.remove('hidden');
+            statusEl.className = "mt-4 text-xs text-center font-medium text-brand-600";
+            statusEl.textContent = `Procesando "${file.name}"...`;
+
+            setTimeout(() => {
+                document.getElementById('data-source-label').innerHTML = `Fuente de Datos: <strong>${file.name} (Actualizado)</strong>`;
+                document.getElementById('upload-modal').classList.add('hidden');
+                statusEl.classList.add('hidden');
+                updateDashboard();
+            }, 1000);
+        }
+
+        function exportToCSV() {
+            const dataset = getFilteredDataset();
+            let csv = "Entidad,Presupuesto_Meta,Cumplimiento_Real,Porcentaje_Cumplimiento,Runrate_Proyectado\n";
+            dataset.forEach(i => {
+                csv += `"${i.nombre}",${i.presupuesto},${i.cumplimiento},${(i.porcentaje*100).toFixed(2)}%,${i.runrate}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `Reporte_Ventas_2026_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+        }
+    </script>
+</body>
+</html>
